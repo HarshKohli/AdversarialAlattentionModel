@@ -20,24 +20,32 @@ def read_marco_data(file_path, word_to_id_lookup):
             para_indices = get_word_indices(para_tokens, word_to_id_lookup)
             para_indices.append(word_to_id_lookup['***true***'])
             para_indices.append(word_to_id_lookup['***false***'])
-            paragraph_info.append({'Tokens': para_tokens, 'Indices': para_indices, 'Lengths': (len(para_tokens) + 2)})
+            paragraph_info.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens) + 2)})
             if passage['is_selected'] == 1:
                 answer_passage_index = passage_no
-        if answer.lower() != 'yes' and answer.lower() != 'no' and answer.lower() != 'no answer present.' and answer_passage_index < len(paragraph_info):
-            answer_start, answer_end = get_closest_span_marco(paragraph_info[answer_passage_index]['Tokens'], answer_tokens)
+        if answer.lower() != 'yes' and answer.lower() != 'no' and answer.lower() != 'no answer present.' and answer_passage_index < len(
+                paragraph_info):
+            answer_start, answer_end = get_closest_span_marco(paragraph_info[answer_passage_index]['Tokens'],
+                                                              answer_tokens)
             if answer_start == None or answer_end == None:
                 continue
         question_tokens = cleanly_tokenize(data['query'][passage_id])
         question_indices = get_word_indices(question_tokens, word_to_id_lookup)
-        question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices, 'QuestionLength': len(question_tokens)}
+        question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
+                         'QuestionLength': len(question_tokens)}
         if answer.lower() == 'yes':
-            answer_start, answer_end = paragraph_info[answer_passage_index]['Lengths'] - 2, paragraph_info[answer_passage_index]['Lengths'] - 2
+            answer_start, answer_end = paragraph_info[answer_passage_index]['Length'] - 2, \
+                                       paragraph_info[answer_passage_index]['Length'] - 2
         elif answer.lower() == 'no':
-            answer_start, answer_end = paragraph_info[answer_passage_index]['Lengths'] - 1, paragraph_info[answer_passage_index]['Lengths'] - 1
+            answer_start, answer_end = paragraph_info[answer_passage_index]['Length'] - 1, \
+                                       paragraph_info[answer_passage_index]['Length'] - 1
         elif answer.lower() == answer.lower() != 'no answer present.':
             answer_start, answer_end = 0, 0
-        dataset.append({'Paragraphs': paragraph_info, 'Question': question_info, 'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+        dataset.append({'Paragraphs': paragraph_info, 'Question': question_info, 'AnswerStart': answer_start,
+                        'AnswerEnd': answer_end, 'AnswerPassage': answer_passage_index})
+        np.random.shuffle(dataset)
     return dataset
+
 
 def read_word_embeddings(file_path):
     f = open(file_path, "r", encoding='utf8')
