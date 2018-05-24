@@ -1,25 +1,20 @@
 # Author: Harsh Kohli
 # Date created: 5/15/2018
 
+import yaml
+import pickle
 from utils.ioutils import read_marco_data, read_word_embeddings
 from models.machine_comprehension import MCModel as Model
 
 if __name__ == '__main__':
-    config = dict()
-
-    config['task'] = 'marco'
-    config['train_path'] = 'datasets/train_v2.1.json'
-    config['dev_path'] = 'datasets/dev_v2.1.json'
-    config['embedding_path'] = 'embeddings/glove.6B.100d.txt'
-    config['num_iterations'] = 100
-    config['batch_size'] = 20
-
+    config = yaml.safe_load(open('config.yml', 'r'))
     word_to_id_lookup, embeddings = read_word_embeddings(config['embedding_path'])
     config['vocab_size'] = embeddings.shape[0]
     config['embedding_size'] = embeddings.shape[1]
 
-    train_data = read_marco_data(config['train_path'], word_to_id_lookup)
-    dev_data = read_marco_data(config['dev_path'], word_to_id_lookup)
+    serialized_data_file = open(config['preprocessed_data_path'], 'rb')
+    data = pickle.load(serialized_data_file)
+    train_data, dev_data = data['train_data'], data['dev_data']
 
     model = Model(config)
     model.train(train_data, dev_data, word_to_id_lookup, embeddings, config)

@@ -66,7 +66,7 @@ def get_relevant_batch_data(batch, word_to_id_lookup):
     padded_paragraphs = []
     for paragraph in paragraphs:
         padded_paragraphs.append(pad_and_stack(paragraph, max_para_len, word_to_id_lookup))
-    return create_numpy_dict(np.stack(padded_paragraphs), pad_and_stack(questions, max_question_len, word_to_id_lookup),
+    return create_numpy_dict(np.array(padded_paragraphs), pad_and_stack(questions, max_question_len, word_to_id_lookup),
                              para_labels, answer_start, answer_end,
                              para_sizes, questions_sizes)
 
@@ -78,7 +78,7 @@ def create_numpy_dict(paragraphs, questions, para_labels, answer_starts, answer_
         'para_labels': np.array(para_labels),
         'answer_starts': np.array(answer_starts),
         'answer_ends': np.array(answer_ends),
-        'para_lengths': np.stack(para_lengths),
+        'para_lengths': np.array(para_lengths),
         'question_lengths': np.array(question_lengths)
     }
     return batch_info
