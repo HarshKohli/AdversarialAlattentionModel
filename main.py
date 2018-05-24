@@ -3,7 +3,7 @@
 
 import yaml
 import pickle
-from utils.ioutils import read_marco_data, read_word_embeddings
+from utils.ioutils import read_word_embeddings
 from models.machine_comprehension import MCModel as Model
 
 if __name__ == '__main__':
