@@ -11,10 +11,15 @@ if __name__ == '__main__':
     config['train_path'] = 'datasets/train_v2.1.json'
     config['dev_path'] = 'datasets/dev_v2.1.json'
     config['embedding_path'] = 'embeddings/glove.6B.100d.txt'
+    config['num_iterations'] = 100
+    config['batch_size'] = 20
 
     word_to_id_lookup, embeddings = read_word_embeddings(config['embedding_path'])
+    config['vocab_size'] = embeddings.shape[0]
+    config['embedding_size'] = embeddings.shape[1]
+
     train_data = read_marco_data(config['train_path'], word_to_id_lookup)
     dev_data = read_marco_data(config['dev_path'], word_to_id_lookup)
 
     model = Model(config)
-    model.train()
+    model.train(train_data, dev_data, word_to_id_lookup, embeddings, config)

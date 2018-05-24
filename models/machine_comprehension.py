@@ -13,15 +13,15 @@ class MCModel():
         self.paragraphs = tf.placeholder(tf.int32, (None, None, None), 'all_paragraphs')
         self.questions = tf.placeholder(tf.int32, (None, None), 'questions')
         self.para_labels = tf.placeholder(tf.int32, (None), 'answer_paras')
-        self.answer_starts = tf.placeholder(tf.int32, (None), 'answer_paras')
-        self.answer_ends = tf.placeholder(tf.int32, (None), 'answer_paras')
-        self.para_lengths = tf.placeholder(tf.int32, (None, None), 'answer_paras')
-        self.question_lengths = tf.placeholder(tf.int32, (None), 'answer_paras')
+        self.answer_starts = tf.placeholder(tf.int32, (None), 'answer_starts')
+        self.answer_ends = tf.placeholder(tf.int32, (None), 'answer_ends')
+        self.para_lengths = tf.placeholder(tf.int32, (None, None), 'para_lengths')
+        self.question_lengths = tf.placeholder(tf.int32, (None), 'question_lengths')
 
     def train(self, train_data, dev_data, word_to_id_lookup, embeddings, config):
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver()
+        # saver = tf.train.Saver()
         best_dev_loss = float('inf')
         for iteration_no in range(config['num_iterations']):
             batch_info = get_batch(train_data, iteration_no, word_to_id_lookup, config)

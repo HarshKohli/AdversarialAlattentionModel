@@ -31,7 +31,7 @@ def get_closest_span_marco(para_tokens, answer_tokens):
     return None, None
 
 
-def get_batch(dataset, iteration_no, config, word_to_id_lookup):
+def get_batch(dataset, iteration_no, word_to_id_lookup, config):
     start = (iteration_no * config['batch_size']) % (len(dataset))
     end = start + config['batch_size']
     if end < len(dataset):
@@ -56,7 +56,7 @@ def get_relevant_batch_data(batch, word_to_id_lookup):
         paragraphs.append(indices)
         para_sizes.append(np.array(sizes))
         questions.append(element['Question']['QuestionIndices'])
-        question_length = element['Question']['QuestionIndices']
+        question_length = element['Question']['QuestionLength']
         questions_sizes.append(question_length)
         if question_length > max_question_len:
             max_question_len = question_length
@@ -66,7 +66,8 @@ def get_relevant_batch_data(batch, word_to_id_lookup):
     padded_paragraphs = []
     for paragraph in paragraphs:
         padded_paragraphs.append(pad_and_stack(paragraph, max_para_len, word_to_id_lookup))
-    return create_numpy_dict(np.stack(padded_paragraphs), pad_and_stack(questions), answer_start, answer_end,
+    return create_numpy_dict(np.stack(padded_paragraphs), pad_and_stack(questions, max_question_len, word_to_id_lookup),
+                             para_labels, answer_start, answer_end,
                              para_sizes, questions_sizes)
 
 

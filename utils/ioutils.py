@@ -11,6 +11,8 @@ def read_marco_data(file_path, word_to_id_lookup):
     data = json.load(open(file_path, 'r'))
     dataset = []
     for index, passage_id in enumerate(data['passages']):
+        if index == 1000:
+            break
         answer = data['answers'][passage_id][0]
         answer_tokens = cleanly_tokenize(answer)
         answer_passage_index = len(data['passages'][passage_id])
