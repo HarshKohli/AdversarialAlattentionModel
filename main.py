@@ -3,6 +3,7 @@
 
 import yaml
 import pickle
+import tensorflow as tf
 from utils.ioutils import read_word_embeddings
 from models.machine_comprehension import MCModel as Model
 
@@ -16,5 +17,7 @@ if __name__ == '__main__':
     data = pickle.load(serialized_data_file)
     train_data, dev_data = data['train_data'], data['dev_data']
 
+    sess = tf.Session()
     model = Model(config)
-    model.train(train_data, dev_data, word_to_id_lookup, embeddings, config)
+    model.initialize_word_embeddings(sess, embeddings)
+    model.train(train_data, dev_data, word_to_id_lookup, config)
