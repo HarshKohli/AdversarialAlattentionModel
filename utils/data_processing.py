@@ -44,7 +44,7 @@ def get_batch(dataset, iteration_no, word_to_id_lookup, config):
 
 def get_relevant_batch_data(batch, word_to_id_lookup):
     paragraphs, questions, para_labels, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], [], []
-    max_para_len, max_question_len = 0, 0
+    max_para_len, max_question_len, max_num_paras = 0, 0, 0
     for element in batch:
         sizes, indices = [], []
         for paragraph in element['Paragraphs']:
@@ -53,6 +53,8 @@ def get_relevant_batch_data(batch, word_to_id_lookup):
             if length > max_para_len:
                 max_para_len = length
             indices.append(paragraph['Indices'])
+        if len(element['Paragraphs']) > max_num_paras:
+            max_num_paras = len(element['Paragraphs'])
         paragraphs.append(indices)
         para_sizes.append(np.array(sizes))
         questions.append(element['Question']['QuestionIndices'])
@@ -65,8 +67,8 @@ def get_relevant_batch_data(batch, word_to_id_lookup):
         para_labels.append(element['AnswerPassage'])
     padded_paragraphs = []
     for paragraph in paragraphs:
-        padded_paragraphs.append(pad_and_stack(paragraph, max_para_len, word_to_id_lookup))
-    return create_numpy_dict(np.array(padded_paragraphs), pad_and_stack(questions, max_question_len, word_to_id_lookup),
+        padded_paragraphs.append(pad_and_stack(paragraph, max_para_len, word_to_id_lookup, max_num_paras))
+    return create_numpy_dict(np.stack(padded_paragraphs), pad_and_stack(questions, max_question_len, word_to_id_lookup),
                              para_labels, answer_start, answer_end,
                              para_sizes, questions_sizes)
 
@@ -84,10 +86,13 @@ def create_numpy_dict(paragraphs, questions, para_labels, answer_starts, answer_
     return batch_info
 
 
-def pad_and_stack(sequences, length, word_to_id_lookup):
+def pad_and_stack(sequences, length, word_to_id_lookup, double_pad=None):
     padded_sequence = []
     for sequence in sequences:
         padded_sequence.append(np.array(sequence + [word_to_id_lookup['***pad***']] * (length - len(sequence))))
+    if double_pad is not None:
+        for _ in range(double_pad - len(sequences)):
+            padded_sequence.append([word_to_id_lookup['***pad***']] * length)
     return np.stack(padded_sequence)
 
 

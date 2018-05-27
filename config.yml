@@ -4,4 +4,6 @@ dev_path: datasets/dev_v2.1.json
 preprocessed_data_path: datasets/preprocessed/preprocessed.pickle
 embedding_path: embeddings/glove.6B.100d.txt
 num_iterations: 100
+hidden_size: 100
 batch_size: 20
+dropout_keep_prob: 0.8
