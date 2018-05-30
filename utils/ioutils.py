@@ -3,52 +3,89 @@
 
 import json
 import numpy as np
+import random
 from utils.data_processing import get_word_indices
 from utils.data_processing import cleanly_tokenize, get_closest_span_marco
 
 
-def read_marco_data(file_path, word_to_id_lookup):
+def read_marco_train_data(file_path, word_to_id_lookup):
     data = json.load(open(file_path, 'r'))
-    dataset = []
+    primary_dataset = {}
+    adverserial_dataset = {}
     for index, passage_id in enumerate(data['passages']):
         if index == 1000:
             break
         answer = data['answers'][passage_id][0]
         answer_tokens = cleanly_tokenize(answer)
-        answer_passage_index = len(data['passages'][passage_id])
-        paragraph_info = []
+        good_cop = None
+        bad_cop = []
         for passage_no, passage in enumerate(data['passages'][passage_id]):
             para_tokens = cleanly_tokenize(passage['passage_text'])
             para_indices = get_word_indices(para_tokens, word_to_id_lookup)
-            para_indices.append(word_to_id_lookup['***true***'])
-            para_indices.append(word_to_id_lookup['***false***'])
-            paragraph_info.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens) + 2)})
             if passage['is_selected'] == 1:
-                answer_passage_index = passage_no
-        paragraph_info.append({'Tokens': [], 'Indices': [word_to_id_lookup['***no_answer***']], 'Length': 1})
-        if answer.lower() != 'yes' and answer.lower() != 'no' and answer.lower() != 'no answer present.' and answer_passage_index < (len(
-                paragraph_info) + 1):
-            answer_start, answer_end = get_closest_span_marco(paragraph_info[answer_passage_index]['Tokens'],
-                                                              answer_tokens)
-            if answer_start is None or answer_end is None:
-                continue
-        elif answer.lower() == 'yes':
-            answer_start, answer_end = paragraph_info[answer_passage_index]['Length'] - 2, \
-                                       paragraph_info[answer_passage_index]['Length'] - 2
-        elif answer.lower() == 'no':
-            answer_start, answer_end = paragraph_info[answer_passage_index]['Length'] - 1, \
-                                       paragraph_info[answer_passage_index]['Length'] - 1
-        elif answer.lower() == 'no answer present.':
-            answer_start, answer_end = 0, 0
-        else:
-            continue
-        question_tokens = cleanly_tokenize(data['query'][passage_id])
+                if answer.lower() != 'yes' and answer.lower() != 'no' and answer.lower() != 'no answer present.':
+                    answer_start, answer_end = get_closest_span_marco(para_tokens, answer_tokens)
+                    if answer_start is None or answer_end is None:
+                        continue
+                    good_cop = (
+                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+                elif answer.lower() == 'yes' or answer.lower() == 'no':
+                    answer_start, answer_end = None, None
+                    good_cop = (
+                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+            else:
+                bad_cop.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
+                                'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None})
+        if len(good_cop) == 0:
+            transfer = random.choice(bad_cop)
+            good_cop.append(transfer)
+            bad_cop.remove(transfer)
+        question = data['query'][passage_id]
+        question_tokens = cleanly_tokenize(question)
         question_indices = get_word_indices(question_tokens, word_to_id_lookup)
         question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
                          'QuestionLength': len(question_tokens)}
-        dataset.append({'Paragraphs': paragraph_info, 'Question': question_info, 'AnswerStart': answer_start,
-                        'AnswerEnd': answer_end, 'AnswerPassage': answer_passage_index})
-        np.random.shuffle(dataset)
+        primary_dataset[question] = {'ParagraphInfo': good_cop, 'Question_Info': question_info}
+        adverserial_dataset[question] = {'ParagraphInfo': bad_cop, 'Question_Info': question_info}
+    return primary_dataset, adverserial_dataset
+
+def read_marco_dev_data(file_path, word_to_id_lookup):
+    data = json.load(open(file_path, 'r'))
+    dataset = {}
+    for index, passage_id in enumerate(data['passages']):
+        if index == 1000:
+            break
+        answer = data['answers'][passage_id][0]
+        answer_tokens = cleanly_tokenize(answer)
+        query_data = []
+        for passage_no, passage in enumerate(data['passages'][passage_id]):
+            para_tokens = cleanly_tokenize(passage['passage_text'])
+            para_indices = get_word_indices(para_tokens, word_to_id_lookup)
+            if passage['is_selected'] == 1:
+                if answer.lower() != 'yes' and answer.lower() != 'no' and answer.lower() != 'no answer present.':
+                    answer_start, answer_end = get_closest_span_marco(para_tokens, answer_tokens)
+                    if answer_start is None or answer_end is None:
+                        continue
+                    query_data.append(
+                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+                elif answer.lower() == 'yes' or answer.lower() == 'no':
+                    answer_start, answer_end = None, None
+                    query_data.append(
+                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+            else:
+                query_data.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
+                                'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None})
+
+        question = data['query'][passage_id]
+        question_tokens = cleanly_tokenize(question)
+        question_indices = get_word_indices(question_tokens, word_to_id_lookup)
+        question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
+                         'QuestionLength': len(question_tokens)}
+        dataset[question] = {'ParagraphInfo': query_data, 'Question_Info': question_info}
     return dataset
 
 
