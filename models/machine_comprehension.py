@@ -40,11 +40,11 @@ class MCModel():
         #                                                 (tf.shape(self.encoded_passages)[0], tf.shape(self.encoded_passages)[1],
         #                                                          tf.shape(self.questions)[1], 2 * hidden_size))
 
-    def train(self, sess, train_data, dev_data, word_to_id_lookup, config):
+    def train(self, sess, primary_train_data, adverserial_train_data, dev_data, word_to_id_lookup, config):
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
         best_dev_loss = float('inf')
         for iteration_no in range(config['num_iterations']):
-            batch_info = get_batch(train_data, iteration_no, word_to_id_lookup, config)
+            batch_info = get_batch(primary_train_data, iteration_no, word_to_id_lookup, config)
             feed_dict = self.create_feed_dict(batch_info, config['dropout_keep_prob'])
             _ = sess.run([self.encoder_output], feed_dict=feed_dict)
             print('here')
