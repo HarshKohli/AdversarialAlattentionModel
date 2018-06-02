@@ -10,8 +10,7 @@ from utils.data_processing import cleanly_tokenize, get_closest_span_marco
 
 def read_marco_train_data(file_path, word_to_id_lookup):
     data = json.load(open(file_path, 'r'))
-    primary_dataset = {}
-    adverserial_dataset = {}
+    dataset = []
     for index, passage_id in enumerate(data['passages']):
         if index == 1000:
             break
@@ -38,7 +37,7 @@ def read_marco_train_data(file_path, word_to_id_lookup):
             else:
                 bad_cop.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
                                 'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None})
-        if len(good_cop) == 0:
+        if len(good_cop) == 0 or good_cop is None:
             transfer = random.choice(bad_cop)
             good_cop.append(transfer)
             bad_cop.remove(transfer)
@@ -46,10 +45,9 @@ def read_marco_train_data(file_path, word_to_id_lookup):
         question_tokens = cleanly_tokenize(question)
         question_indices = get_word_indices(question_tokens, word_to_id_lookup)
         question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
-                         'QuestionLength': len(question_tokens)}
-        primary_dataset[question] = {'ParagraphInfo': good_cop, 'Question_Info': question_info}
-        adverserial_dataset[question] = {'ParagraphInfo': bad_cop, 'Question_Info': question_info}
-    return primary_dataset, adverserial_dataset
+                         'QuestionLength': len(question_tokens), 'Question': question}
+        dataset.append({'ParagraphInfo': good_cop, 'AdversaryInfo': bad_cop, 'QuestionInfo': question_info})
+    return dataset
 
 def read_marco_dev_data(file_path, word_to_id_lookup):
     data = json.load(open(file_path, 'r'))
