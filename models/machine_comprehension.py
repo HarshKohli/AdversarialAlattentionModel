@@ -13,12 +13,11 @@ class MCModel():
         self.embeddings_placeholder = tf.placeholder(tf.float32, (config['vocab_size'], config['embedding_size']),
                                                      'embeddings_placeholder')
         self.embeddings = tf.Variable(self.embeddings_placeholder, trainable=False, validate_shape=True)
-        self.paragraphs = tf.placeholder(tf.int32, (None, None, None), 'all_paragraphs')
+        self.paragraphs = tf.placeholder(tf.int32, (None, None), 'all_paragraphs')
         self.questions = tf.placeholder(tf.int32, (None, None), 'questions')
-        self.para_labels = tf.placeholder(tf.int32, (None), 'answer_paras')
         self.answer_starts = tf.placeholder(tf.int32, (None), 'answer_starts')
         self.answer_ends = tf.placeholder(tf.int32, (None), 'answer_ends')
-        self.para_lengths = tf.placeholder(tf.int32, (None, None), 'para_lengths')
+        self.para_lengths = tf.placeholder(tf.int32, (None), 'para_lengths')
         self.question_lengths = tf.placeholder(tf.int32, (None), 'question_lengths')
         self.keep_prob = tf.placeholder(tf.float32, [], 'keep_probability')
 
@@ -36,9 +35,6 @@ class MCModel():
                                            [tf.shape(self.paragraphs)[0], tf.shape(self.paragraphs)[1],
                                             tf.shape(self.paragraphs)[2], 2 * hidden_size])
         self.encoder_output = dynamic_coattention(self.encoded_passages, self.question_hidden_states)
-        # self.encoded_questions_broadcasted = tf.reshape(self.question_hidden_states,
-        #                                                 (tf.shape(self.encoded_passages)[0], tf.shape(self.encoded_passages)[1],
-        #                                                          tf.shape(self.questions)[1], 2 * hidden_size))
 
     def train(self, sess, primary_train_data, dev_data, word_to_id_lookup, config):
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
@@ -57,7 +53,6 @@ class MCModel():
         feed_dict = {
             self.paragraphs: batch['paragraphs'],
             self.questions: batch['questions'],
-            self.para_labels: batch['para_labels'],
             self.answer_starts: batch['answer_starts'],
             self.answer_ends: batch['answer_ends'],
             self.para_lengths: batch['para_lengths'],
