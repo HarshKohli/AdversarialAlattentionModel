@@ -11,7 +11,6 @@ def pointer_network(sequence, dim, sequence_length, labels, name):
         answer_pointer_cell = tf.contrib.rnn.LSTMCell(num_units=dim)
         attention_cell = tf.contrib.seq2seq.AttentionWrapper(answer_pointer_cell, attention_mechanism)
         logits, _ = tf.nn.static_rnn(attention_cell, labels, sequence_length=sequence_length)
-        tf.contrib.rnn.MultiRNNCell
         return logits
 
 def decode(Hr, para_lengths, dim, cell_init, name):
