@@ -37,9 +37,9 @@ def read_marco_train_data(file_path, word_to_id_lookup):
             else:
                 bad_cop.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
                                 'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None})
-        if len(good_cop) == 0 or good_cop is None:
+        if good_cop is None or len(good_cop) == 0:
             transfer = random.choice(bad_cop)
-            good_cop.append(transfer)
+            good_cop = transfer
             bad_cop.remove(transfer)
         question = data['query'][passage_id]
         question_tokens = cleanly_tokenize(question)

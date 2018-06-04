@@ -11,7 +11,7 @@ if __name__ == '__main__':
     config = yaml.safe_load(open('config.yml', 'r'))
     serialized_data_file = open(config['preprocessed_data_path'], 'rb')
     data = pickle.load(serialized_data_file)
-    train_data, dev_data, word_to_id_lookup, embeddings = data['primary_train_data'], data['dev_data'], data[
+    train_data, dev_data, word_to_id_lookup, embeddings = data['train_data'], data['dev_data'], data[
         'word_to_id_lookup'], data['embeddings']
     config['vocab_size'] = embeddings.shape[0]
     config['embedding_size'] = embeddings.shape[1]
