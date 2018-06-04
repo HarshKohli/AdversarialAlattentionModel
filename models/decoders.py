@@ -4,16 +4,16 @@
 import tensorflow as tf
 
 
-def pointer_network(sequence, dim, sequence_length, labels, name):
-    with tf.variable_scope(name):
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units=dim, memory=sequence,
-                                                                   memory_sequence_length=sequence_length)
-        answer_pointer_cell = tf.contrib.rnn.LSTMCell(num_units=dim)
-        attention_cell = tf.contrib.seq2seq.AttentionWrapper(answer_pointer_cell, attention_mechanism)
-        logits, _ = tf.nn.static_rnn(attention_cell, labels, sequence_length=sequence_length)
-        return logits
+# def pointer_network(sequence, dim, sequence_length, labels, name):
+#     with tf.variable_scope(name):
+#         attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units=dim, memory=sequence,
+#                                                                    memory_sequence_length=sequence_length)
+#         answer_pointer_cell = tf.contrib.rnn.LSTMCell(num_units=dim)
+#         attention_cell = tf.contrib.seq2seq.AttentionWrapper(answer_pointer_cell, attention_mechanism)
+#         logits, _ = tf.nn.static_rnn(attention_cell, labels, sequence_length=sequence_length)
+#         return logits
 
-def decode(Hr, para_lengths, dim, cell_init, name):
+def pointer_network(Hr, para_lengths, dim, cell_init, name):
     with tf.variable_scope(name):
         V = tf.get_variable("V", [2*dim, dim], initializer=tf.contrib.layers.xavier_initializer())
         Wa = tf.get_variable("Wa", [dim, dim], initializer=tf.contrib.layers.xavier_initializer())

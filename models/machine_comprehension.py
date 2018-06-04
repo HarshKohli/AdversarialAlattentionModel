@@ -5,6 +5,7 @@ import tensorflow as tf
 from utils.data_processing import get_training_batch
 from utils.tf_utils import bi_lstm
 from models.encoders import dynamic_coattention
+from models.decoders import pointer_network
 
 
 class MCModel():
@@ -30,12 +31,15 @@ class MCModel():
                                                          'question_preprocessor', self.keep_prob)
         self.encoder_output = dynamic_coattention(passage_states, question_states, self.para_lengths, hidden_size,
                                                   self.keep_prob)
+        self.decoder_output = pointer_network(self.encoder_output, self.para_lengths, hidden_size, 'lol',
+                                              'pointer_network_decoder')
+        print('here')
 
-    def train(self, sess, primary_train_data, dev_data, word_to_id_lookup, config):
+    def train(self, sess, train_data, dev_data, word_to_id_lookup, config):
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
         best_dev_loss = float('inf')
         for iteration_no in range(config['num_iterations']):
-            batch_info = get_training_batch(primary_train_data, iteration_no, word_to_id_lookup, config)
+            batch_info = get_training_batch(train_data, iteration_no, word_to_id_lookup, config)
             feed_dict = self.create_feed_dict(batch_info, config['dropout_keep_prob'])
             _ = sess.run([self.encoder_output], feed_dict=feed_dict)
             print('here')
