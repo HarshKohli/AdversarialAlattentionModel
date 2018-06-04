@@ -13,4 +13,4 @@ def bi_lstm(inputs, seq_len, dim, name, keep_prob):
         hidden_states, final_states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw, cell_bw=lstm_bw,
                                                                       inputs=inputs, sequence_length=seq_len,
                                                                       dtype=tf.float32, scope=name)
-        return hidden_states, final_states
+        return tf.concat(hidden_states, axis=2), tf.concat(final_states, axis=2)
