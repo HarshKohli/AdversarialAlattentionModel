@@ -5,7 +5,7 @@ import tensorflow as tf
 from utils.data_processing import get_training_batch
 from utils.tf_utils import bi_lstm
 from models.encoders import dynamic_coattention
-from models.decoders import pointer_network
+from models.decoders import dynamic_pointing_decoder
 
 
 class MCModel():
@@ -31,7 +31,7 @@ class MCModel():
                                                          'question_preprocessor', self.keep_prob)
         self.encoder_output = dynamic_coattention(passage_states, question_states, self.para_lengths, hidden_size,
                                                   self.keep_prob)
-        self.decoder_output = pointer_network(self.encoder_output, self.para_lengths, hidden_size, 'lol',
+        self.decoder_output = pointer_network(self.encoder_output, self.para_lengths, hidden_size,
                                               'pointer_network_decoder')
         print('here')
 
