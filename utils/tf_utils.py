@@ -8,8 +8,10 @@ def bi_lstm(inputs, seq_len, dim, name, keep_prob):
     with tf.name_scope(name):
         with tf.variable_scope('forward' + name):
             lstm_fw = tf.contrib.rnn.LSTMCell(num_units=dim)
+            lstm_fw = tf.contrib.rnn.DropoutWrapper(lstm_fw, input_keep_prob=keep_prob)
         with tf.variable_scope('backward' + name):
             lstm_bw = tf.contrib.rnn.LSTMCell(num_units=dim)
+            lstm_bw = tf.contrib.rnn.DropoutWrapper(lstm_bw, input_keep_prob=keep_prob)
         hidden_states, final_states = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstm_fw, cell_bw=lstm_bw,
                                                                       inputs=inputs, sequence_length=seq_len,
                                                                       dtype=tf.float32, scope=name)

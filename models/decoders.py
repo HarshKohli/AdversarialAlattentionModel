@@ -16,7 +16,6 @@ def dynamic_pointing_decoder(encoding, document_length, dim, pool_size, max_iter
         end = document_length - 1
         answer = tf.stack([start, end], axis=1)
         state = lstm_dec.zero_state(batch_size, dtype=tf.float32)
-        logits = tf.TensorArray(tf.float32, size=max_iter, clear_after_read=False)
 
         for i in range(max_iter):
             output, state = lstm_dec(start_and_end_encoding(encoding, answer), state)
@@ -25,9 +24,8 @@ def dynamic_pointing_decoder(encoding, document_length, dim, pool_size, max_iter
             start = tf.argmax(start_logit, axis=1, output_type=tf.int32)
             end = tf.argmax(end_logit, axis=1, output_type=tf.int32)
             answer = tf.stack([start, end], axis=1)
-            logits = logits.write(i, logit)
 
-    return logits
+    return start_logit, end_logit, answer
 
 
 def start_and_end_encoding(encoding, answer):
@@ -39,7 +37,7 @@ def start_and_end_encoding(encoding, answer):
 
 
 def decoder_body(encoding, state, answer, state_size, pool_size, document_length, keep_prob):
-    maxlen = tf.shape(encoding)[1]
+    max_len = tf.shape(encoding)[1]
 
     def highway_maxout_network(answer):
         span_encoding = start_and_end_encoding(encoding, answer)
@@ -47,7 +45,7 @@ def decoder_body(encoding, state, answer, state_size, pool_size, document_length
         r_input = tf.nn.dropout(r_input, keep_prob)
         r = tf.layers.dense(r_input, state_size, use_bias=False, activation=tf.tanh)
         r = tf.expand_dims(r, 1)
-        r = tf.tile(r, (1, maxlen, 1))
+        r = tf.tile(r, (1, max_len, 1))
         highway_input = tf.concat([encoding, r], 2)
         logit = highway_maxout(highway_input, state_size, pool_size, keep_prob)
         logit = _maybe_mask_score(logit, document_length, -1e30)

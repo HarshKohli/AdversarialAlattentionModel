@@ -32,28 +32,18 @@ def get_closest_span_marco(para_tokens, answer_tokens):
     return None, None
 
 
-def get_batch_questions(dataset, iteration_no, config):
+def get_batch_input(dataset, iteration_no, config):
     start = (iteration_no * config['batch_size']) % (len(dataset))
     end = start + config['batch_size']
     if end < len(dataset):
-        return [x for x in range(da)]
+        batch = dataset[start:end]
     else:
         batch = dataset[start: len(dataset)]
         batch.extend(dataset[0:(end - len(dataset))])
+    return batch
 
 
-def get_adverserial_batch(dataset, iteration_no, word_to_id_lookup, config):
-    start = (iteration_no * config['batch_size']) % (len(dataset))
-    end = start + config['batch_size']
-    if end < len(dataset):
-        return get_adverserial_batch_data(dataset[start:end], word_to_id_lookup)
-    else:
-        batch = dataset[start: len(dataset)]
-        batch.extend(dataset[0:(end - len(dataset))])
-        return get_adverserial_batch_data(batch, word_to_id_lookup)
-
-
-def get_adverserial_batch_data(batch, word_to_id_lookup):
+def get_adverserial_batch(batch, word_to_id_lookup):
     paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], []
     for element in batch:
         for adverserial_element in element['AdversaryInfo']:
@@ -68,22 +58,12 @@ def get_adverserial_batch_data(batch, word_to_id_lookup):
                              np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
 
 
-def get_training_batch(dataset, best_adversaries, iteration_no, word_to_id_lookup, config):
-    start = (iteration_no * config['batch_size']) % (len(dataset))
-    end = start + config['batch_size']
-    if end < len(dataset):
-        return get_training_batch_data(dataset[start:end], best_adversaries, word_to_id_lookup)
-    else:
-        batch = dataset[start: len(dataset)]
-        batch.extend(dataset[0:(end - len(dataset))])
-        return get_training_batch_data(batch, best_adversaries, word_to_id_lookup)
-
-
-def get_training_batch_data(batch, best_adversaries, word_to_id_lookup):
-    paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], []
+def get_training_batch(batch, best_adversaries, word_to_id_lookup):
+    paragraphs, questions, answer_starts, answer_ends, para_sizes, questions_sizes = [], [], [], [], [], []
     for element in batch:
-        if element['Question'] in best_adversaries:
-            adversary_indices = best_adversaries['Question']['Indices']
+        if element['QuestionInfo']['Question'] in best_adversaries:
+            best_adversary = best_adversaries[element['QuestionInfo']['Question']]
+            adversary_indices = best_adversary['Indices']
             para_indices = element['ParagraphInfo']['Indices']
             adversary_first = False
             if bool(random.getrandbits(1)):
@@ -91,31 +71,49 @@ def get_training_batch_data(batch, best_adversaries, word_to_id_lookup):
                 adversary_first = True
             else:
                 paragraphs.append(para_indices + adversary_indices)
-            para_sizes.append(best_adversaries['Question']['Length'] + element['ParagraphInfo']['Length'] + 3)
+            para_sizes.append(best_adversary['Length'] + element['ParagraphInfo']['Length'] + 3)
             answer = element['ParagraphInfo']['Answer']
+            answer_start = element['ParagraphInfo']['AnswerStart']
+            answer_end = element['ParagraphInfo']['AnswerEnd']
             if answer_start is not None and answer_end is not None:
                 if adversary_first:
-                    answer_start.append(
-                        best_adversaries['Question']['Length'] + element['ParagraphInfo']['AnswerStart'])
-                    answer_end.append(
-                        best_adversaries['Question']['Length'] + element['ParagraphInfo']['AnswerEnd'])
+                    answer_starts.append(best_adversary['Length'] + answer_start)
+                    answer_ends.append(best_adversary['Length'] + answer_end)
                 else:
-                    answer_start.append(element['ParagraphInfo']['AnswerStart'])
-                    answer_end.append(element['ParagraphInfo']['AnswerStart'])
+                    answer_starts.append(answer_start)
+                    answer_ends.append(answer_end)
             elif answer.lower() == 'yes':
-                answer_start.append(para_sizes[-1] - 3)
-                answer_end.append(para_sizes[-1] - 3)
+                answer_starts.append(para_sizes[-1] - 3)
+                answer_ends.append(para_sizes[-1] - 3)
             elif answer.lower() == 'no':
-                answer_start.append(para_sizes[-1] - 2)
-                answer_end.append(para_sizes[-1] - 2)
+                answer_starts.append(para_sizes[-1] - 2)
+                answer_ends.append(para_sizes[-1] - 2)
             else:
-                answer_start.append(para_sizes[-1] - 1)
-                answer_end.append(para_sizes[-1] - 1)
+                answer_starts.append(para_sizes[-1] - 1)
+                answer_ends.append(para_sizes[-1] - 1)
         questions.append(element['QuestionInfo']['QuestionIndices'])
         questions_sizes.append(element['QuestionInfo']['QuestionLength'])
     return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
-                             pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
-                             np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
+                             pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_starts),
+                             np.stack(answer_ends), np.stack(para_sizes), np.stack(questions_sizes))
+
+
+def get_strongest_adversaries(batch, predicted_starts, predicted_ends):
+    index = 0
+    start_end_sums = np.array(predicted_starts) + np.array(predicted_ends)
+    strongest_adversaries = {}
+    for element in batch:
+        min = float('inf')
+        best_adversary = None
+        for adversary in element['AdversaryInfo']:
+            probability_of_no_answer = start_end_sums[index][adversary['Length']]
+            if probability_of_no_answer < min:
+                min = probability_of_no_answer
+                best_adversary = adversary
+            index = index + 1
+        if best_adversary is not None:
+            strongest_adversaries[element['QuestionInfo']['Question']] = best_adversary
+    return strongest_adversaries
 
 
 def create_numpy_dict(paragraphs, questions, answer_starts, answer_ends, para_lengths, question_lengths):

@@ -7,3 +7,6 @@ num_iterations: 100
 hidden_size: 100
 batch_size: 20
 dropout_keep_prob: 0.8
+learning_rate: 0.001
+maxout_pool_size: 4
+decoding_iterations: 4

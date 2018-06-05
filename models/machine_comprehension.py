@@ -2,7 +2,7 @@
 # Date created: 5/23/2018
 
 import tensorflow as tf
-from utils.data_processing import get_training_batch
+from utils.data_processing import get_batch_input, get_training_batch, get_adverserial_batch, get_strongest_adversaries
 from utils.tf_utils import bi_lstm
 from models.encoders import dynamic_coattention
 from models.decoders import dynamic_pointing_decoder
@@ -25,24 +25,36 @@ class MCModel():
         hidden_size = config['hidden_size']
         paragraph_embeddings = tf.nn.embedding_lookup(self.embeddings, self.paragraphs)
         question_embeddings = tf.nn.embedding_lookup(self.embeddings, self.questions)
-        passage_states, passage_final_states = bi_lstm(paragraph_embeddings, self.para_lengths, hidden_size,
-                                                       'passage_preprocessor', self.keep_prob)
-        question_states, question_final_states = bi_lstm(question_embeddings, self.question_lengths, hidden_size,
-                                                         'question_preprocessor', self.keep_prob)
+        passage_states, _ = bi_lstm(paragraph_embeddings, self.para_lengths, hidden_size,
+                                    'passage_preprocessor', self.keep_prob)
+        question_states, _ = bi_lstm(question_embeddings, self.question_lengths, hidden_size,
+                                     'question_preprocessor', self.keep_prob)
         self.encoder_output = dynamic_coattention(passage_states, question_states, self.para_lengths, hidden_size,
                                                   self.keep_prob)
-        self.decoder_output = pointer_network(self.encoder_output, self.para_lengths, hidden_size,
-                                              'pointer_network_decoder')
-        print('here')
+        self.start_probs, self.end_probs, self.answers = dynamic_pointing_decoder(self.encoder_output,
+                                                                                  self.para_lengths, hidden_size,
+                                                                                  config['maxout_pool_size'],
+                                                                                  config['decoding_iterations'],
+                                                                                  self.keep_prob, 'decoder')
+        loss1 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.start_probs, labels=self.answer_starts)
+        loss2 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.end_probs, labels=self.answer_ends)
+        self.loss = tf.reduce_mean(loss1 + loss2)
+        self.optimizer = tf.train.AdamOptimizer(config['learning_rate']).minimize(self.loss)
 
     def train(self, sess, train_data, dev_data, word_to_id_lookup, config):
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
         best_dev_loss = float('inf')
         for iteration_no in range(config['num_iterations']):
-            batch_info = get_training_batch(train_data, iteration_no, word_to_id_lookup, config)
-            feed_dict = self.create_feed_dict(batch_info, config['dropout_keep_prob'])
-            _ = sess.run([self.encoder_output], feed_dict=feed_dict)
-            print('here')
+            batch = get_batch_input(train_data, iteration_no, config)
+            adversary_batch = get_adverserial_batch(batch, word_to_id_lookup)
+            feed_dict = self.create_feed_dict(adversary_batch, 1.0)
+            predicted_starts, predicted_ends = sess.run([self.start_probs, self.end_probs],
+                                                        feed_dict=feed_dict)
+            best_adversaries = get_strongest_adversaries(batch, predicted_starts, predicted_ends)
+            training_batch_info = get_training_batch(batch, best_adversaries, word_to_id_lookup)
+            feed_dict = self.create_feed_dict(training_batch_info, config['dropout_keep_prob'])
+            loss, _ = sess.run([self.loss, self.optimizer], feed_dict=feed_dict)
+            print(loss)
 
     def initialize_word_embeddings(self, sess, embeddings):
         init_op = tf.global_variables_initializer()
