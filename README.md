@@ -17,7 +17,7 @@ Set hyperparams in config file and run
 python3 preprocess.py
 ```
 
-##Training
+## Training
 
 ```
 python3 main.py
