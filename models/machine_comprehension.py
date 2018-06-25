@@ -2,7 +2,8 @@
 # Date created: 5/23/2018
 
 import tensorflow as tf
-from utils.data_processing import get_batch_input, get_training_batch, get_adverserial_batch, get_strongest_adversaries
+from utils.data_processing import get_batch_input, get_training_batch, get_adversarial_batch, get_strongest_adversaries, \
+    get_dev_batch
 from utils.tf_utils import bi_lstm
 from models.encoders import dynamic_coattention
 from models.decoders import dynamic_pointing_decoder
@@ -38,15 +39,16 @@ class MCModel():
                                                                                   self.keep_prob, 'decoder')
         loss1 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.start_probs, labels=self.answer_starts)
         loss2 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.end_probs, labels=self.answer_ends)
-        self.loss = tf.reduce_mean(loss1 + loss2)
-        self.optimizer = tf.train.AdamOptimizer(config['learning_rate']).minimize(self.loss)
+        self.loss = tf.reduce_sum(loss1 + loss2)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=config['learning_rate']).minimize(self.loss)
 
     def train(self, sess, train_data, dev_data, word_to_id_lookup, config):
         saver = tf.train.Saver(tf.trainable_variables(), max_to_keep=1)
         best_dev_loss = float('inf')
+        dev_iterations = int(len(dev_data) / config['dev_batch_size']) + 1
         for iteration_no in range(config['num_iterations']):
-            batch = get_batch_input(train_data, iteration_no, config)
-            adversary_batch = get_adverserial_batch(batch, word_to_id_lookup)
+            batch = get_batch_input(train_data, iteration_no, config, True)
+            adversary_batch = get_adversarial_batch(batch, word_to_id_lookup)
             feed_dict = self.create_feed_dict(adversary_batch, 1.0)
             predicted_starts, predicted_ends = sess.run([self.start_probs, self.end_probs],
                                                         feed_dict=feed_dict)
@@ -54,13 +56,29 @@ class MCModel():
             training_batch_info = get_training_batch(batch, best_adversaries, word_to_id_lookup)
             feed_dict = self.create_feed_dict(training_batch_info, config['dropout_keep_prob'])
             loss, _ = sess.run([self.loss, self.optimizer], feed_dict=feed_dict)
+            if iteration_no % config['checkpoint'] == 0:
+                dev_loss = self.run_dev_set(sess, dev_data, dev_iterations, word_to_id_lookup, config)
+                if dev_loss < best_dev_loss:
+                    best_dev_loss = dev_loss
+                    saver.save(sess, config['save_dir'])
+                    print('Saved best model')
             print(loss)
+
+    def run_dev_set(self, sess, dev_data, dev_iters, word_to_id_lookup, config):
+        dev_loss = 0
+        for iteration_no in range(dev_iters):
+            batch = get_batch_input(dev_data, iteration_no, config, False)
+            dev_batch_info = get_dev_batch(batch, word_to_id_lookup)
+            feed_dict = self.create_feed_dict(dev_batch_info)
+            loss, _ = sess.run([self.loss, self.answers], feed_dict=feed_dict)
+            dev_loss = dev_loss + loss
+        return dev_loss
 
     def initialize_word_embeddings(self, sess, embeddings):
         init_op = tf.global_variables_initializer()
         sess.run(init_op, {self.embeddings_placeholder: embeddings})
 
-    def create_feed_dict(self, batch, keep_prob):
+    def create_feed_dict(self, batch, keep_prob=1.0):
         feed_dict = {
             self.paragraphs: batch['paragraphs'],
             self.questions: batch['questions'],

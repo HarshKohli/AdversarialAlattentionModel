@@ -32,30 +32,57 @@ def get_closest_span_marco(para_tokens, answer_tokens):
     return None, None
 
 
-def get_batch_input(dataset, iteration_no, config):
+def get_batch_input(dataset, iteration_no, config, wraparound):
     start = (iteration_no * config['batch_size']) % (len(dataset))
     end = start + config['batch_size']
     if end < len(dataset):
         batch = dataset[start:end]
     else:
         batch = dataset[start: len(dataset)]
-        batch.extend(dataset[0:(end - len(dataset))])
+        if wraparound is True:
+            batch.extend(dataset[0:(end - len(dataset))])
     return batch
 
 
-def get_adverserial_batch(batch, word_to_id_lookup):
+def get_adversarial_batch(batch, word_to_id_lookup):
     paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], []
     for element in batch:
-        for adverserial_element in element['AdversaryInfo']:
-            paragraphs.append(adverserial_element['Indices'])
-            questions.append(element['QuestionInfo']['QuestionIndices'])
-            para_sizes.append(adverserial_element['Length'] + 3)
-            questions_sizes.append(element['QuestionInfo']['QuestionLength'])
-            answer_start.append(adverserial_element['Length'] + 2)
-            answer_end.append(adverserial_element['Length'] + 2)
+        for adversarial_element in element['AdversaryInfo']:
+            update_default_fields(adversarial_element, paragraphs, questions, answer_start, answer_end, para_sizes,
+                                  questions_sizes,
+                                  adversarial_element['Length'] + 2, adversarial_element['Length'] + 2,
+                                  element['QuestionInfo'])
     return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
                              pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
                              np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
+
+
+def get_dev_batch(batch, word_to_id_lookup):
+    paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], []
+    for element in batch:
+        start = element['ParagraphInfo']['AnswerStart']
+        end = element['ParagraphInfo']['AnswerEnd']
+        if start is None or end is None:
+            start, end = yes_no_dont_know(element['ParagraphInfo']['Answer'], para_sizes[-1])
+        update_default_fields(element, paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes,
+                              start, end)
+    return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
+                             pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
+                             np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
+
+
+def update_default_fields(element, paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes, start,
+                          end, question_info=None):
+    paragraphs.append(element['ParagraphInfo']['Indices'])
+    para_sizes.append(element['ParagraphInfo']['Length'] + 3)
+    answer_start.append(start)
+    answer_end.append(end)
+    if question_info is not None:
+        questions.append(question_info['QuestionIndices'])
+        questions_sizes.append(question_info['QuestionLength'])
+    else:
+        questions.append(element['QuestionInfo']['QuestionIndices'])
+        questions_sizes.append(element['QuestionInfo']['QuestionLength'])
 
 
 def get_training_batch(batch, best_adversaries, word_to_id_lookup):
@@ -76,26 +103,34 @@ def get_training_batch(batch, best_adversaries, word_to_id_lookup):
             answer_start = element['ParagraphInfo']['AnswerStart']
             answer_end = element['ParagraphInfo']['AnswerEnd']
             if answer_start is not None and answer_end is not None:
-                if adversary_first:
+                if adversary_first is True:
                     answer_starts.append(best_adversary['Length'] + answer_start)
                     answer_ends.append(best_adversary['Length'] + answer_end)
                 else:
                     answer_starts.append(answer_start)
                     answer_ends.append(answer_end)
-            elif answer.lower() == 'yes':
-                answer_starts.append(para_sizes[-1] - 3)
-                answer_ends.append(para_sizes[-1] - 3)
-            elif answer.lower() == 'no':
-                answer_starts.append(para_sizes[-1] - 2)
-                answer_ends.append(para_sizes[-1] - 2)
             else:
-                answer_starts.append(para_sizes[-1] - 1)
-                answer_ends.append(para_sizes[-1] - 1)
+                start, end = yes_no_dont_know(answer, para_sizes[-1])
+                answer_starts.append(start)
+                answer_ends.append(end)
         questions.append(element['QuestionInfo']['QuestionIndices'])
         questions_sizes.append(element['QuestionInfo']['QuestionLength'])
     return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
                              pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_starts),
                              np.stack(answer_ends), np.stack(para_sizes), np.stack(questions_sizes))
+
+
+def yes_no_dont_know(answer, para_size):
+    if answer.lower() == 'yes':
+        start = (para_size - 3)
+        end = (para_size - 3)
+    elif answer.lower() == 'no':
+        start = (para_size - 2)
+        end = (para_size - 2)
+    else:
+        start = (para_size - 1)
+        end = (para_size - 1)
+    return start, end
 
 
 def get_strongest_adversaries(batch, predicted_starts, predicted_ends):

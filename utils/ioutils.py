@@ -27,13 +27,13 @@ def read_marco_train_data(file_path, word_to_id_lookup):
                     if answer_start is None or answer_end is None:
                         continue
                     good_cop = (
-                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
-                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+                        {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                         'AnswerStart': answer_start, 'AnswerEnd': answer_end})
                 elif answer.lower() == 'yes' or answer.lower() == 'no':
                     answer_start, answer_end = None, None
                     good_cop = (
-                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
-                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+                        {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                         'AnswerStart': answer_start, 'AnswerEnd': answer_end})
             else:
                 bad_cop.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
                                 'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None})
@@ -49,15 +49,20 @@ def read_marco_train_data(file_path, word_to_id_lookup):
         dataset.append({'ParagraphInfo': good_cop, 'AdversaryInfo': bad_cop, 'QuestionInfo': question_info})
     return dataset
 
+
 def read_marco_dev_data(file_path, word_to_id_lookup):
     data = json.load(open(file_path, 'r'))
-    dataset = {}
+    dataset = []
     for index, passage_id in enumerate(data['passages']):
         if index == 1000:
             break
         answer = data['answers'][passage_id][0]
         answer_tokens = cleanly_tokenize(answer)
-        query_data = []
+        question = data['query'][passage_id]
+        question_tokens = cleanly_tokenize(question)
+        question_indices = get_word_indices(question_tokens, word_to_id_lookup)
+        question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
+                         'QuestionLength': len(question_tokens)}
         for passage_no, passage in enumerate(data['passages'][passage_id]):
             para_tokens = cleanly_tokenize(passage['passage_text'])
             para_indices = get_word_indices(para_tokens, word_to_id_lookup)
@@ -66,24 +71,15 @@ def read_marco_dev_data(file_path, word_to_id_lookup):
                     answer_start, answer_end = get_closest_span_marco(para_tokens, answer_tokens)
                     if answer_start is None or answer_end is None:
                         continue
-                    query_data.append(
-                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
-                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
                 elif answer.lower() == 'yes' or answer.lower() == 'no':
                     answer_start, answer_end = None, None
-                    query_data.append(
-                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
-                     'AnswerStart': answer_start, 'AnswerEnd': answer_end})
+                query_data = {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)),
+                              'Answer': answer,
+                              'AnswerStart': answer_start, 'AnswerEnd': answer_end}
             else:
-                query_data.append({'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
-                                'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None})
-
-        question = data['query'][passage_id]
-        question_tokens = cleanly_tokenize(question)
-        question_indices = get_word_indices(question_tokens, word_to_id_lookup)
-        question_info = {'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
-                         'QuestionLength': len(question_tokens)}
-        dataset[question] = {'ParagraphInfo': query_data, 'Question_Info': question_info}
+                query_data = {'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
+                              'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None}
+            dataset.append({'ParagraphInfo': query_data, 'Question_Info': question_info})
     return dataset
 
 

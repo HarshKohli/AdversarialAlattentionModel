@@ -3,10 +3,13 @@ train_path: datasets/train_v2.1.json
 dev_path: datasets/dev_v2.1.json
 preprocessed_data_path: datasets/preprocessed/preprocessed.pickle
 embedding_path: embeddings/glove.6B.100d.txt
-num_iterations: 100
+save_dir: saved_models/
+num_iterations: 100000
 hidden_size: 100
 batch_size: 20
+dev_batch_size: 100
 dropout_keep_prob: 0.8
 learning_rate: 0.001
 maxout_pool_size: 4
 decoding_iterations: 4
+checkpoint: 2
