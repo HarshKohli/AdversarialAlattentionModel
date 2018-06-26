@@ -79,7 +79,7 @@ def read_marco_dev_data(file_path, word_to_id_lookup):
             else:
                 query_data = {'Tokens': para_tokens, 'Indices': para_indices, 'Length': len(para_tokens),
                               'Answer': 'no answer present.', 'AnswerStart': None, 'AnswerEnd': None}
-            dataset.append({'ParagraphInfo': query_data, 'Question_Info': question_info})
+            dataset.append({'ParagraphInfo': query_data, 'QuestionInfo': question_info})
     return dataset
 
 

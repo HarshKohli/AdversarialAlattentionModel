@@ -32,9 +32,9 @@ def get_closest_span_marco(para_tokens, answer_tokens):
     return None, None
 
 
-def get_batch_input(dataset, iteration_no, config, wraparound):
-    start = (iteration_no * config['batch_size']) % (len(dataset))
-    end = start + config['batch_size']
+def get_batch_input(dataset, iteration_no, batch_size, wraparound):
+    start = (iteration_no * batch_size) % (len(dataset))
+    end = start + batch_size
     if end < len(dataset):
         batch = dataset[start:end]
     else:
@@ -52,9 +52,16 @@ def get_adversarial_batch(batch, word_to_id_lookup):
                                   questions_sizes,
                                   adversarial_element['Length'] + 2, adversarial_element['Length'] + 2,
                                   element['QuestionInfo'])
-    return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
+    return create_numpy_dict(pad_and_stack(add_extra_embeddings(paragraphs), max(para_sizes), word_to_id_lookup),
                              pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
                              np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
+
+
+def add_extra_embeddings(paragraphs, word_to_id_lookup):
+    for paragraph in paragraphs:
+        paragraph.append(word_to_id_lookup['***true***'])
+        paragraph.append(word_to_id_lookup['***false***'])
+        paragraph.append(word_to_id_lookup['***no_answer***'])
 
 
 def get_dev_batch(batch, word_to_id_lookup):
@@ -63,26 +70,23 @@ def get_dev_batch(batch, word_to_id_lookup):
         start = element['ParagraphInfo']['AnswerStart']
         end = element['ParagraphInfo']['AnswerEnd']
         if start is None or end is None:
-            start, end = yes_no_dont_know(element['ParagraphInfo']['Answer'], para_sizes[-1])
-        update_default_fields(element, paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes,
-                              start, end)
-    return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
+            start, end = yes_no_dont_know(element['ParagraphInfo']['Answer'], element['ParagraphInfo']['Length'] + 3)
+        update_default_fields(element['ParagraphInfo'], paragraphs, questions, answer_start, answer_end, para_sizes,
+                              questions_sizes,
+                              start, end, element['QuestionInfo'])
+    return create_numpy_dict(pad_and_stack(add_extra_embeddings(paragraphs), max(para_sizes), word_to_id_lookup),
                              pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
                              np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
 
 
 def update_default_fields(element, paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes, start,
-                          end, question_info=None):
-    paragraphs.append(element['ParagraphInfo']['Indices'])
-    para_sizes.append(element['ParagraphInfo']['Length'] + 3)
+                          end, question_info):
+    paragraphs.append(element['Indices'])
+    para_sizes.append(element['Length'] + 3)
     answer_start.append(start)
     answer_end.append(end)
-    if question_info is not None:
-        questions.append(question_info['QuestionIndices'])
-        questions_sizes.append(question_info['QuestionLength'])
-    else:
-        questions.append(element['QuestionInfo']['QuestionIndices'])
-        questions_sizes.append(element['QuestionInfo']['QuestionLength'])
+    questions.append(question_info['QuestionIndices'])
+    questions_sizes.append(question_info['QuestionLength'])
 
 
 def get_training_batch(batch, best_adversaries, word_to_id_lookup):
@@ -115,7 +119,7 @@ def get_training_batch(batch, best_adversaries, word_to_id_lookup):
                 answer_ends.append(end)
         questions.append(element['QuestionInfo']['QuestionIndices'])
         questions_sizes.append(element['QuestionInfo']['QuestionLength'])
-    return create_numpy_dict(pad_and_stack(paragraphs, max(para_sizes), word_to_id_lookup),
+    return create_numpy_dict(pad_and_stack(add_extra_embeddings(paragraphs), max(para_sizes), word_to_id_lookup),
                              pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_starts),
                              np.stack(answer_ends), np.stack(para_sizes), np.stack(questions_sizes))
 
@@ -138,12 +142,12 @@ def get_strongest_adversaries(batch, predicted_starts, predicted_ends):
     start_end_sums = np.array(predicted_starts) + np.array(predicted_ends)
     strongest_adversaries = {}
     for element in batch:
-        min = float('inf')
+        min_prob = float('inf')
         best_adversary = None
         for adversary in element['AdversaryInfo']:
             probability_of_no_answer = start_end_sums[index][adversary['Length']]
-            if probability_of_no_answer < min:
-                min = probability_of_no_answer
+            if probability_of_no_answer < min_prob:
+                min_prob = probability_of_no_answer
                 best_adversary = adversary
             index = index + 1
         if best_adversary is not None:
