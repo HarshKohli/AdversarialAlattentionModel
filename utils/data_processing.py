@@ -4,6 +4,7 @@
 import numpy as np
 from nltk import word_tokenize
 import random
+import copy
 
 
 def get_word_indices(tokens, word_to_id_lookup):
@@ -52,16 +53,19 @@ def get_adversarial_batch(batch, word_to_id_lookup):
                                   questions_sizes,
                                   adversarial_element['Length'] + 2, adversarial_element['Length'] + 2,
                                   element['QuestionInfo'])
-    return create_numpy_dict(pad_and_stack(add_extra_embeddings(paragraphs), max(para_sizes), word_to_id_lookup),
-                             pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
-                             np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
+    return create_numpy_dict(
+        pad_and_stack(add_extra_embeddings(paragraphs, word_to_id_lookup), max(para_sizes), word_to_id_lookup),
+        pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
+        np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
 
 
 def add_extra_embeddings(paragraphs, word_to_id_lookup):
-    for paragraph in paragraphs:
+    modifified_paragraphs = copy.deepcopy(paragraphs)
+    for paragraph in modifified_paragraphs:
         paragraph.append(word_to_id_lookup['***true***'])
         paragraph.append(word_to_id_lookup['***false***'])
         paragraph.append(word_to_id_lookup['***no_answer***'])
+    return modifified_paragraphs
 
 
 def get_dev_batch(batch, word_to_id_lookup):
@@ -74,9 +78,10 @@ def get_dev_batch(batch, word_to_id_lookup):
         update_default_fields(element['ParagraphInfo'], paragraphs, questions, answer_start, answer_end, para_sizes,
                               questions_sizes,
                               start, end, element['QuestionInfo'])
-    return create_numpy_dict(pad_and_stack(add_extra_embeddings(paragraphs), max(para_sizes), word_to_id_lookup),
-                             pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
-                             np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
+    return create_numpy_dict(
+        pad_and_stack(add_extra_embeddings(paragraphs, word_to_id_lookup), max(para_sizes), word_to_id_lookup),
+        pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_start),
+        np.stack(answer_end), np.stack(para_sizes), np.stack(questions_sizes))
 
 
 def update_default_fields(element, paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes, start,
@@ -119,9 +124,10 @@ def get_training_batch(batch, best_adversaries, word_to_id_lookup):
                 answer_ends.append(end)
         questions.append(element['QuestionInfo']['QuestionIndices'])
         questions_sizes.append(element['QuestionInfo']['QuestionLength'])
-    return create_numpy_dict(pad_and_stack(add_extra_embeddings(paragraphs), max(para_sizes), word_to_id_lookup),
-                             pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_starts),
-                             np.stack(answer_ends), np.stack(para_sizes), np.stack(questions_sizes))
+    return create_numpy_dict(
+        pad_and_stack(add_extra_embeddings(paragraphs, word_to_id_lookup), max(para_sizes), word_to_id_lookup),
+        pad_and_stack(questions, max(questions_sizes), word_to_id_lookup), np.stack(answer_starts),
+        np.stack(answer_ends), np.stack(para_sizes), np.stack(questions_sizes))
 
 
 def yes_no_dont_know(answer, para_size):
