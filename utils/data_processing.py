@@ -32,6 +32,7 @@ def get_closest_span_marco(para_tokens, answer_tokens):
             return index, last_count
     return None, None
 
+
 def get_closest_span_squad(para_tokens, answer_tokens, answer_start):
     character_count = 0
     for index, para_word in enumerate(para_tokens):
@@ -42,6 +43,35 @@ def get_closest_span_squad(para_tokens, answer_tokens, answer_start):
                     break
             return index, index + len(answer_tokens)
     return None, None
+
+
+def process_squad_para(paragraph, word_to_id_lookup):
+    para_tokens = cleanly_tokenize(paragraph['context'])
+    para_indices = get_word_indices(para_tokens, word_to_id_lookup)
+    all_data = []
+    all_questions = []
+    for sample in paragraph['qas']:
+        if sample['is_impossible'] is True:
+            answer_start, answer_end = None, None
+            answer = 'no answer present.'
+        elif sample['is_impossible'] is False:
+            answer = sample['answers'][0]['text']
+            answer_tokens = cleanly_tokenize(answer)
+            answer_start, answer_end = get_closest_span_squad(para_tokens, answer_tokens,
+                                                              sample['answers'][0]['answer_start'])
+            if answer_start is None or answer_end is None:
+                continue
+        else:
+            raise ValueError('Dont know whether to answer')
+        all_data.append((
+            {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+             'AnswerStart': answer_start, 'AnswerEnd': answer_end}))
+        question = sample['question']
+        question_tokens = cleanly_tokenize(question)
+        question_indices = get_word_indices(question_tokens, word_to_id_lookup)
+        all_questions.append({'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
+                              'QuestionLength': len(question_tokens), 'Question': question})
+    return all_data, all_questions
 
 
 def get_batch_input(dataset, iteration_no, batch_size, wraparound):
