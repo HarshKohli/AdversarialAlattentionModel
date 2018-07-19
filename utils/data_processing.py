@@ -32,6 +32,17 @@ def get_closest_span_marco(para_tokens, answer_tokens):
             return index, last_count
     return None, None
 
+def get_closest_span_squad(para_tokens, answer_tokens, answer_start):
+    character_count = 0
+    for index, para_word in enumerate(para_tokens):
+        character_count = character_count + len(para_word) + 1
+        if character_count > answer_start - 50:
+            for answer_word_no, answer_word in enumerate(answer_tokens):
+                if answer_word != answer_tokens[answer_word_no]:
+                    break
+            return index, index + len(answer_tokens)
+    return None, None
+
 
 def get_batch_input(dataset, iteration_no, batch_size, wraparound):
     start = (iteration_no * batch_size) % (len(dataset))
@@ -60,12 +71,12 @@ def get_adversarial_batch(batch, word_to_id_lookup):
 
 
 def add_extra_embeddings(paragraphs, word_to_id_lookup):
-    modifified_paragraphs = copy.deepcopy(paragraphs)
-    for paragraph in modifified_paragraphs:
+    modified_paragraphs = copy.deepcopy(paragraphs)
+    for paragraph in modified_paragraphs:
         paragraph.append(word_to_id_lookup['***true***'])
         paragraph.append(word_to_id_lookup['***false***'])
         paragraph.append(word_to_id_lookup['***no_answer***'])
-    return modifified_paragraphs
+    return modified_paragraphs
 
 
 def get_dev_batch(batch, word_to_id_lookup):

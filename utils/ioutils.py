@@ -4,16 +4,68 @@
 import json
 import numpy as np
 import random
+import copy
 from utils.data_processing import get_word_indices
-from utils.data_processing import cleanly_tokenize, get_closest_span_marco
+from utils.data_processing import cleanly_tokenize, get_closest_span_marco, get_closest_span_squad
 
+def read_data(config, word_to_id_lookup, type):
+    if config['task'] == 'marco':
+        if type == 'train':
+            data = json.load(open(config['train_path'], 'r'))
+            return read_marco_train_data(data, word_to_id_lookup)
+        elif type == 'dev':
+            data = json.load(open(config['dev_path'], 'r'))
+            return read_marco_dev_data(data, word_to_id_lookup)
+    elif config['task'] == 'squad':
+        if type == 'train':
+            data = json.load(open(config['train_path'], 'r'))
+            return read_squad_train_data(data, word_to_id_lookup)
+        elif type == 'dev':
+            data = json.load(open(config['dev_path'], 'r'))
+            return read_marco_dev_data(data, word_to_id_lookup)
+    else:
+        raise ValueError('Invalid task type')
 
-def read_marco_train_data(file_path, word_to_id_lookup):
-    data = json.load(open(file_path, 'r'))
+def read_squad_train_data(data, word_to_id_lookup):
+    dataset = []
+    for datum in data['data']:
+        for paragraph in datum['paragraphs']:
+            para_tokens = cleanly_tokenize(paragraph['context'])
+            para_indices = get_word_indices(para_tokens, word_to_id_lookup)
+            all_data = []
+            all_questions = []
+            for sample in paragraph['qas']:
+                if sample['is_impossible'] is True:
+                    answer_start, answer_end = None, None
+                    answer = 'no answer present.'
+                elif sample['is_impossible'] is False:
+                    answer = sample['answers'][0]['text']
+                    answer_tokens = cleanly_tokenize(answer)
+                    answer_start, answer_end = get_closest_span_squad(para_tokens, answer_tokens, sample['answers'][0]['answer_start'])
+                    if answer_start is None or answer_end is None:
+                        break
+                else:
+                    raise ValueError('Dont know whether to answer')
+                all_data.append((
+                    {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
+                     'AnswerStart': answer_start, 'AnswerEnd': answer_end}))
+                question = sample['question']
+                question_tokens = cleanly_tokenize(question)
+                question_indices = get_word_indices(question_tokens, word_to_id_lookup)
+                all_questions.append({'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
+                                 'QuestionLength': len(question_tokens), 'Question': question})
+            for index, processed_datum in enumerate(all_data):
+                adversaries = copy.deepcopy(all_data)
+                adversaries.remove(processed_datum)
+                for adversary in adversaries:
+                    adversary['Answer'] = 'no answer present.'
+                    adversary['AnswerStart'], adversary['AnswerEnd'] = None, None
+                dataset.append({'ParagraphInfo': processed_datum, 'AdversaryInfo': adversaries, 'QuestionInfo': all_questions[index]})
+    print('here')
+
+def read_marco_train_data(data, word_to_id_lookup):
     dataset = []
     for index, passage_id in enumerate(data['passages']):
-        if index == 1000:
-            break
         answer = data['answers'][passage_id][0]
         answer_tokens = cleanly_tokenize(answer)
         good_cop = None
@@ -54,8 +106,6 @@ def read_marco_dev_data(file_path, word_to_id_lookup):
     data = json.load(open(file_path, 'r'))
     dataset = []
     for index, passage_id in enumerate(data['passages']):
-        if index == 1000:
-            break
         answer = data['answers'][passage_id][0]
         answer_tokens = cleanly_tokenize(answer)
         question = data['query'][passage_id]

@@ -1,6 +1,6 @@
-task: marco
-train_path: datasets/train_v2.1.json
-dev_path: datasets/dev_v2.1.json
+task: squad
+train_path: datasets/train-v2.0.json
+dev_path: datasets/dev-v2.0.json
 preprocessed_data_path: datasets/preprocessed/preprocessed.pickle
 embedding_path: embeddings/glove.6B.100d.txt
 save_dir: saved_models/
