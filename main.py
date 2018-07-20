@@ -13,8 +13,16 @@ if __name__ == '__main__':
     data = pickle.load(serialized_data_file)
     train_data, dev_data, word_to_id_lookup, embeddings = data['train_data'], data['dev_data'], data[
         'word_to_id_lookup'], data['embeddings']
+
     config['vocab_size'] = embeddings.shape[0]
     config['embedding_size'] = embeddings.shape[1]
+
+    if config['task'] == 'squad':
+        config['extra_vectors'] = 1
+    elif config['task'] == 'marco':
+        config['extra_vectors'] = 3
+    else:
+        raise ValueError('Invalid task type')
 
     sess = tf.Session()
     model = Model(config)

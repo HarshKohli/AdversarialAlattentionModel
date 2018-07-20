@@ -48,12 +48,13 @@ class MCModel():
         dev_iterations = int(len(dev_data) / config['dev_batch_size']) + 1
         for iteration_no in range(config['num_iterations']):
             batch = get_batch_input(train_data, iteration_no, config['batch_size'], True)
-            adversary_batch = get_adversarial_batch(batch, word_to_id_lookup)
+            adversary_batch = get_adversarial_batch(batch, word_to_id_lookup, config['extra_vectors'])
             feed_dict = self.create_feed_dict(adversary_batch, 1.0)
             predicted_starts, predicted_ends = sess.run([self.start_probs, self.end_probs],
                                                         feed_dict=feed_dict)
             best_adversaries = get_strongest_adversaries(batch, predicted_starts, predicted_ends)
-            training_batch_info = get_training_batch(batch, best_adversaries, word_to_id_lookup)
+            training_batch_info = get_training_batch(batch, best_adversaries, word_to_id_lookup,
+                                                     config['extra_vectors'])
             feed_dict = self.create_feed_dict(training_batch_info, config['dropout_keep_prob'])
             loss, _ = sess.run([self.loss, self.optimizer], feed_dict=feed_dict)
             if iteration_no % config['checkpoint'] == 0:
@@ -68,7 +69,7 @@ class MCModel():
         dev_loss = 0
         for iteration_no in range(dev_iters):
             batch = get_batch_input(dev_data, iteration_no, config['dev_batch_size'], False)
-            dev_batch_info = get_dev_batch(batch, word_to_id_lookup)
+            dev_batch_info = get_dev_batch(batch, word_to_id_lookup, config['extra_vectors'])
             feed_dict = self.create_feed_dict(dev_batch_info)
             loss, _ = sess.run([self.loss, self.answers], feed_dict=feed_dict)
             dev_loss = dev_loss + loss

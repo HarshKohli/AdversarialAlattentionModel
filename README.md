@@ -1,6 +1,6 @@
 # AdverserialAttentionModel
 
-Machine Comprehension for Marco using adversarial training examples. Will add support for SQuAD in the future.
+Machine Comprehension for Marco v2.1 and Squad v2.0 using adversarial training examples.
 
 ## Requirements
 
