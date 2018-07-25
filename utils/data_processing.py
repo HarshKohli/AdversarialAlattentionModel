@@ -54,7 +54,6 @@ def process_squad_para(paragraph, word_to_id_lookup):
     para_indices = get_word_indices(para_tokens, word_to_id_lookup)
     all_data = []
     all_questions = []
-    good, bad = 0, 0
     for sample in paragraph['qas']:
         if sample['is_impossible'] is True:
             answer_start, answer_end = None, None
@@ -65,11 +64,9 @@ def process_squad_para(paragraph, word_to_id_lookup):
             answer_start, answer_end = get_closest_span_squad(para_tokens, answer_tokens,
                                                               sample['answers'][0]['answer_start'])
             if answer_start is None or answer_end is None:
-                bad = bad + 1
                 continue
         else:
             raise ValueError('Dont know whether to answer')
-        good = good + 1
         all_data.append((
             {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
              'AnswerStart': answer_start, 'AnswerEnd': answer_end}))
@@ -78,7 +75,10 @@ def process_squad_para(paragraph, word_to_id_lookup):
         question_indices = get_word_indices(question_tokens, word_to_id_lookup)
         all_questions.append({'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
                               'QuestionLength': len(question_tokens), 'Question': question})
-    return all_data, all_questions
+    adversarial_mod = ((
+            {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': 'no answer present.',
+             'AnswerStart': None, 'AnswerEnd': None}))
+    return all_data, all_questions, adversarial_mod
 
 
 def get_batch_input(dataset, iteration_no, batch_size, wraparound):

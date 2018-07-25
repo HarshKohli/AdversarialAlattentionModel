@@ -31,15 +31,17 @@ def read_data(config, word_to_id_lookup, type):
 def read_squad_train_data(data, word_to_id_lookup):
     dataset = []
     for datum in data['data']:
+        all_article_data, all_article_questions, all_adversaries = [], [], []
         for paragraph in datum['paragraphs']:
-            all_data, all_questions = process_squad_para(paragraph, word_to_id_lookup)
-            for data_sample, question in zip(all_data, all_questions):
-                adversaries = copy.deepcopy(all_data)
-                adversaries.remove(data_sample)
-                for adversary in adversaries:
-                    adversary['Answer'] = 'no answer present.'
-                    adversary['AnswerStart'], adversary['AnswerEnd'] = None, None
-                dataset.append({'ParagraphInfo': data_sample, 'AdversaryInfo': adversaries, 'QuestionInfo': question})
+            all_data, all_questions, adversary_mod = process_squad_para(paragraph, word_to_id_lookup)
+            all_article_data.append(all_data)
+            all_article_questions.append(all_questions)
+            all_adversaries.append(adversary_mod)
+        for index in range(len(all_article_data)):
+            adversaries = copy.deepcopy(all_adversaries)
+            del adversaries[index]
+            for sample_data, sample_question in zip(all_article_data[index], all_article_questions[index]):
+                dataset.append({'ParagraphInfo': sample_data, 'AdversaryInfo': adversaries, 'QuestionInfo': sample_question})
     return dataset
 
 
