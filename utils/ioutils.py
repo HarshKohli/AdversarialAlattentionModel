@@ -49,7 +49,7 @@ def read_squad_dev_data(data, word_to_id_lookup):
     dataset = []
     for datum in data['data']:
         for paragraph in datum['paragraphs']:
-            all_data, all_questions = process_squad_para(paragraph, word_to_id_lookup)
+            all_data, all_questions, _ = process_squad_para(paragraph, word_to_id_lookup)
             for data_sample, question in zip(all_data, all_questions):
                 dataset.append({'ParagraphInfo': data_sample, 'QuestionInfo': question})
     return dataset
