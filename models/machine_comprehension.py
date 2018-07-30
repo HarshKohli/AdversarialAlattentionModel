@@ -2,6 +2,7 @@
 # Date created: 5/23/2018
 
 import tensorflow as tf
+import numpy as np
 from utils.data_processing import get_batch_input, get_training_batch, get_adversarial_batch, get_strongest_adversaries, \
     get_dev_batch
 from utils.tf_utils import bi_lstm
@@ -31,8 +32,11 @@ class MCModel():
         question_states, _ = bi_lstm(question_embeddings, self.question_lengths, hidden_size,
                                      'question_preprocessor', self.keep_prob)
         self.encoder_output = dynamic_coattention(passage_states, question_states, self.para_lengths, hidden_size,
-                                                  self.keep_prob)
-        self.start_probs, self.end_probs, self.answers = dynamic_pointing_decoder(self.encoder_output,
+                                                  self.keep_prob, 'pqattender')
+        self.self_attention_output = dynamic_coattention(passage_states, passage_states, self.para_lengths, hidden_size,
+                                                  self.keep_prob, 'selfattender')
+        decoder_inputs = tf.concat((self.encoder_output, self.self_attention_output), axis=-1)
+        self.start_probs, self.end_probs, self.answers = dynamic_pointing_decoder(decoder_inputs,
                                                                                   self.para_lengths, hidden_size,
                                                                                   config['maxout_pool_size'],
                                                                                   config['decoding_iterations'],
@@ -48,10 +52,15 @@ class MCModel():
         dev_iterations = int(len(dev_data) / config['dev_batch_size']) + 1
         for iteration_no in range(config['num_iterations']):
             batch = get_batch_input(train_data, iteration_no, config['batch_size'], True)
-            adversary_batch = get_adversarial_batch(batch, word_to_id_lookup, config['extra_vectors'])
-            feed_dict = self.create_feed_dict(adversary_batch, 1.0)
-            predicted_starts, predicted_ends = sess.run([self.start_probs, self.end_probs],
-                                                        feed_dict=feed_dict)
+            chunks = np.split(np.asarray(batch), 8)
+            predicted_starts, predicted_ends = [], []
+            for chunk in chunks:
+                adversary_batch = get_adversarial_batch(chunk, word_to_id_lookup, config['extra_vectors'])
+                feed_dict = self.create_feed_dict(adversary_batch, 1.0)
+                predicted_starts_chunk, predicted_ends_chunk = sess.run([self.start_probs, self.end_probs],
+                                                            feed_dict=feed_dict)
+                predicted_starts.extend(predicted_starts_chunk)
+                predicted_ends.extend(predicted_ends_chunk)
             best_adversaries = get_strongest_adversaries(batch, predicted_starts, predicted_ends)
             training_batch_info = get_training_batch(batch, best_adversaries, word_to_id_lookup,
                                                      config['extra_vectors'])
