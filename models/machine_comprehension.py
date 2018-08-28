@@ -9,7 +9,7 @@ from utils.data_processing import get_batch_input, get_training_batch, get_adver
     get_dev_batch, populate_id_to_answer
 from utils.tf_utils import bi_lstm
 from models.encoders import dynamic_coattention
-from models.decoders import dynamic_pointing_decoder
+from models.decoders import dynamic_pointing_decoder, dcn_loss
 
 
 class MCModel():
@@ -38,14 +38,14 @@ class MCModel():
         self.self_attention_output = dynamic_coattention(passage_states, passage_states, self.para_lengths, hidden_size,
                                                          self.keep_prob, 'selfattender')
         decoder_inputs = tf.concat((self.encoder_output, self.self_attention_output), axis=-1)
-        self.start_probs, self.end_probs, self.answers = dynamic_pointing_decoder(decoder_inputs,
-                                                                                  self.para_lengths, hidden_size,
-                                                                                  config['maxout_pool_size'],
-                                                                                  config['decoding_iterations'],
-                                                                                  self.keep_prob, 'decoder')
-        loss1 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.start_probs, labels=self.answer_starts)
-        loss2 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.end_probs, labels=self.answer_ends)
-        self.loss = tf.reduce_sum(loss1 + loss2)
+        logits, self.start_probs, self.end_probs, self.answers = dynamic_pointing_decoder(decoder_inputs,
+                                                                                          self.para_lengths,
+                                                                                          hidden_size,
+                                                                                          config['maxout_pool_size'],
+                                                                                          config['decoding_iterations'],
+                                                                                          self.keep_prob, 'decoder')
+        self.loss = dcn_loss(logits, tf.stack([self.answer_starts, self.answer_ends], axis=1),
+                             config['decoding_iterations'])
         self.optimizer = tf.train.AdamOptimizer(learning_rate=config['learning_rate']).minimize(self.loss)
 
     def train(self, sess, train_data, dev_data, word_to_id_lookup, config):
@@ -88,7 +88,7 @@ class MCModel():
             if config['task'] == 'squad':
                 populate_id_to_answer(answers, dev_batch_info, id_to_answer_map, batch)
         if config['task'] == 'squad':
-            with open(config['test_output'], 'w') as outfile:
+            with open(config['squad_test_output'], 'w') as outfile:
                 json.dump(id_to_answer_map, outfile)
             squad_eval.main([config['test_path'], config['squad_test_output']])
         return dev_loss

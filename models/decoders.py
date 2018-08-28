@@ -5,18 +5,16 @@ import tensorflow as tf
 from utils.tf_utils import highway_maxout
 from tensorflow.contrib.seq2seq.python.ops.attention_wrapper import _maybe_mask_score
 
-# Taken from the unofficial DCN+ implementation - https://github.com/andrejonasson/dynamic-coattention-network-plus
 def dynamic_pointing_decoder(encoding, document_length, dim, pool_size, max_iter, keep_prob, name):
     with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
         batch_size = tf.shape(encoding)[0]
         lstm_dec = tf.contrib.rnn.LSTMCell(num_units=dim)
         lstm_dec = tf.contrib.rnn.DropoutWrapper(lstm_dec, input_keep_prob=keep_prob)
-
         start = tf.zeros((batch_size,), dtype=tf.int32)
         end = document_length - 1
         answer = tf.stack([start, end], axis=1)
         state = lstm_dec.zero_state(batch_size, dtype=tf.float32)
-
+        logits = tf.TensorArray(tf.float32, size=max_iter, clear_after_read=False)
         for i in range(max_iter):
             output, state = lstm_dec(start_and_end_encoding(encoding, answer), state)
             logit = decoder_body(encoding, output, answer, dim, pool_size, document_length, keep_prob)
@@ -24,8 +22,19 @@ def dynamic_pointing_decoder(encoding, document_length, dim, pool_size, max_iter
             start = tf.argmax(start_logit, axis=1, output_type=tf.int32)
             end = tf.argmax(end_logit, axis=1, output_type=tf.int32)
             answer = tf.stack([start, end], axis=1)
+            logits = logits.write(i, logit)
+    return logits, start_logit, end_logit, answer
 
-    return start_logit, end_logit, answer
+def dcn_loss(logits, answer_span, max_iter):
+    logits = logits.concat()
+    answer_span_repeated = tf.tile(answer_span, (max_iter, 1))
+    start_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits[:, :, 0], labels=answer_span_repeated[:, 0], name='start_loss')
+    end_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits[:, :, 1], labels=answer_span_repeated[:, 1], name='end_loss')
+    start_loss = tf.stack(tf.split(start_loss, max_iter), axis=1)
+    end_loss = tf.stack(tf.split(end_loss, max_iter), axis=1)
+    loss_per_example = tf.reduce_mean(start_loss + end_loss, axis=1)
+    loss = tf.reduce_mean(loss_per_example)
+    return loss
 
 
 def start_and_end_encoding(encoding, answer):
