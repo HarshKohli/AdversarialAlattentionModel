@@ -5,8 +5,7 @@ import json
 import numpy as np
 import random
 import copy
-from utils.data_processing import cleanly_tokenize, get_closest_span_marco, get_closest_span_squad, get_word_indices, \
-    process_squad_para
+from utils.data_processing import cleanly_tokenize, get_closest_span_marco, get_word_indices, process_squad_para
 
 
 def read_data(config, word_to_id_lookup, type):
@@ -24,6 +23,9 @@ def read_data(config, word_to_id_lookup, type):
         elif type == 'dev':
             data = json.load(open(config['dev_path'], 'r'))
             return read_squad_dev_data(data, word_to_id_lookup)
+        elif type == 'test':
+            data = json.load(open(config['test_path'], 'r'))
+            return read_squad_dev_data(data, word_to_id_lookup)
     else:
         raise ValueError('Invalid task type')
 
@@ -33,7 +35,7 @@ def read_squad_train_data(data, word_to_id_lookup):
     for datum in data['data']:
         all_article_data, all_article_questions, all_adversaries = [], [], []
         for paragraph in datum['paragraphs']:
-            all_data, all_questions, adversary_mod = process_squad_para(paragraph, word_to_id_lookup)
+            all_data, all_questions, adversary_mod = process_squad_para(paragraph, word_to_id_lookup, 'train')
             all_article_data.append(all_data)
             all_article_questions.append(all_questions)
             all_adversaries.append(adversary_mod)
@@ -41,7 +43,8 @@ def read_squad_train_data(data, word_to_id_lookup):
             adversaries = copy.deepcopy(all_adversaries)
             del adversaries[index]
             for sample_data, sample_question in zip(all_article_data[index], all_article_questions[index]):
-                dataset.append({'ParagraphInfo': sample_data, 'AdversaryInfo': adversaries, 'QuestionInfo': sample_question})
+                dataset.append(
+                    {'ParagraphInfo': sample_data, 'AdversaryInfo': adversaries, 'QuestionInfo': sample_question})
     return dataset
 
 
@@ -49,7 +52,7 @@ def read_squad_dev_data(data, word_to_id_lookup):
     dataset = []
     for datum in data['data']:
         for paragraph in datum['paragraphs']:
-            all_data, all_questions, _ = process_squad_para(paragraph, word_to_id_lookup)
+            all_data, all_questions, _ = process_squad_para(paragraph, word_to_id_lookup, 'test')
             for data_sample, question in zip(all_data, all_questions):
                 dataset.append({'ParagraphInfo': data_sample, 'QuestionInfo': question})
     return dataset

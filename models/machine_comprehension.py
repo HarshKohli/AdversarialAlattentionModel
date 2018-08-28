@@ -3,8 +3,10 @@
 
 import tensorflow as tf
 import numpy as np
+import json
+import eval.squad_eval as squad_eval
 from utils.data_processing import get_batch_input, get_training_batch, get_adversarial_batch, get_strongest_adversaries, \
-    get_dev_batch
+    get_dev_batch, populate_id_to_answer
 from utils.tf_utils import bi_lstm
 from models.encoders import dynamic_coattention
 from models.decoders import dynamic_pointing_decoder
@@ -34,7 +36,7 @@ class MCModel():
         self.encoder_output = dynamic_coattention(passage_states, question_states, self.para_lengths, hidden_size,
                                                   self.keep_prob, 'pqattender')
         self.self_attention_output = dynamic_coattention(passage_states, passage_states, self.para_lengths, hidden_size,
-                                                  self.keep_prob, 'selfattender')
+                                                         self.keep_prob, 'selfattender')
         decoder_inputs = tf.concat((self.encoder_output, self.self_attention_output), axis=-1)
         self.start_probs, self.end_probs, self.answers = dynamic_pointing_decoder(decoder_inputs,
                                                                                   self.para_lengths, hidden_size,
@@ -58,7 +60,7 @@ class MCModel():
                 adversary_batch = get_adversarial_batch(chunk, word_to_id_lookup, config['extra_vectors'])
                 feed_dict = self.create_feed_dict(adversary_batch, 1.0)
                 predicted_starts_chunk, predicted_ends_chunk = sess.run([self.start_probs, self.end_probs],
-                                                            feed_dict=feed_dict)
+                                                                        feed_dict=feed_dict)
                 predicted_starts.extend(predicted_starts_chunk)
                 predicted_ends.extend(predicted_ends_chunk)
             best_adversaries = get_strongest_adversaries(batch, predicted_starts, predicted_ends)
@@ -76,13 +78,35 @@ class MCModel():
 
     def run_dev_set(self, sess, dev_data, dev_iters, word_to_id_lookup, config):
         dev_loss = 0
+        id_to_answer_map = {}
         for iteration_no in range(dev_iters):
             batch = get_batch_input(dev_data, iteration_no, config['dev_batch_size'], False)
             dev_batch_info = get_dev_batch(batch, word_to_id_lookup, config['extra_vectors'])
             feed_dict = self.create_feed_dict(dev_batch_info)
-            loss, _ = sess.run([self.loss, self.answers], feed_dict=feed_dict)
+            loss, answers = sess.run([self.loss, self.answers], feed_dict=feed_dict)
             dev_loss = dev_loss + loss
+            if config['task'] == 'squad':
+                populate_id_to_answer(answers, dev_batch_info, id_to_answer_map, batch)
+        if config['task'] == 'squad':
+            with open(config['test_output'], 'w') as outfile:
+                json.dump(id_to_answer_map, outfile)
+            squad_eval.main([config['test_path'], config['squad_test_output']])
         return dev_loss
+
+    def test(self, sess, test_data, word_to_id_lookup, config):
+        saver = tf.train.Saver()
+        saver.restore(sess, config['save_dir'])
+        print('model restored')
+        id_to_answer_map = {}
+        test_iterations = int(len(test_data) / config['dev_batch_size']) + 1
+        for iteration_no in range(test_iterations):
+            print(iteration_no)
+            batch = get_batch_input(test_data, iteration_no, config['dev_batch_size'], False)
+            dev_batch_info = get_dev_batch(batch, word_to_id_lookup, config['extra_vectors'])
+            feed_dict = self.create_feed_dict(dev_batch_info)
+            answers = sess.run([self.answers], feed_dict=feed_dict)[0]
+            populate_id_to_answer(answers, dev_batch_info, id_to_answer_map, batch)
+        return id_to_answer_map
 
     def initialize_word_embeddings(self, sess, embeddings):
         init_op = tf.global_variables_initializer()

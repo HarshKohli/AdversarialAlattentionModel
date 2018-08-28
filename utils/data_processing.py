@@ -49,12 +49,27 @@ def get_closest_span_squad(para_tokens, answer_tokens, answer_start):
     return None, None
 
 
-def process_squad_para(paragraph, word_to_id_lookup):
+def populate_id_to_answer(answers, batch_info, id_to_answer_map, batch):
+    for index, answer in enumerate(answers):
+        if answer[0] == batch_info['para_lengths'][index]:
+            id_to_answer_map[batch[index]['ParagraphInfo']['ID']] = ''
+        else:
+            one_answer = ''
+            for word_index in range(answer[0], answer[1] + 1):
+                if word_index == len(batch[index]['ParagraphInfo']['Tokens']):
+                    break
+                one_answer = one_answer + batch[index]['ParagraphInfo']['Tokens'][word_index] + ' '
+            id_to_answer_map[batch[index]['ParagraphInfo']['ID']] = one_answer.strip()
+
+
+def process_squad_para(paragraph, word_to_id_lookup, mode):
     para_tokens = cleanly_tokenize(paragraph['context'])
     para_indices = get_word_indices(para_tokens, word_to_id_lookup)
     all_data = []
     all_questions = []
     for sample in paragraph['qas']:
+        if sample['id'] == '56de1563cffd8e1900b4b5c4':
+            print('found')
         if sample['is_impossible'] is True:
             answer_start, answer_end = None, None
             answer = 'no answer present.'
@@ -64,20 +79,21 @@ def process_squad_para(paragraph, word_to_id_lookup):
             answer_start, answer_end = get_closest_span_squad(para_tokens, answer_tokens,
                                                               sample['answers'][0]['answer_start'])
             if answer_start is None or answer_end is None:
-                continue
+                if mode == 'train':
+                    continue
         else:
             raise ValueError('Dont know whether to answer')
         all_data.append((
             {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': answer,
-             'AnswerStart': answer_start, 'AnswerEnd': answer_end}))
+             'AnswerStart': answer_start, 'AnswerEnd': answer_end, 'ID': sample['id']}))
         question = sample['question']
         question_tokens = cleanly_tokenize(question)
         question_indices = get_word_indices(question_tokens, word_to_id_lookup)
         all_questions.append({'QuestionTokens': question_tokens, 'QuestionIndices': question_indices,
                               'QuestionLength': len(question_tokens), 'Question': question})
     adversarial_mod = ((
-            {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': 'no answer present.',
-             'AnswerStart': None, 'AnswerEnd': None}))
+        {'Tokens': para_tokens, 'Indices': para_indices, 'Length': (len(para_tokens)), 'Answer': 'no answer present.',
+         'AnswerStart': None, 'AnswerEnd': None}))
     return all_data, all_questions, adversarial_mod
 
 
@@ -94,13 +110,13 @@ def get_batch_input(dataset, iteration_no, batch_size, wraparound):
 
 
 def get_adversarial_batch(batch, word_to_id_lookup, extra_vectors):
-    paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], []
+    paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes, ids = [], [], [], [], [], [], []
     for element in batch:
         for adversarial_element in element['AdversaryInfo']:
             update_default_fields(adversarial_element, paragraphs, questions, answer_start, answer_end, para_sizes,
                                   questions_sizes, adversarial_element['Length'] + extra_vectors - 1,
                                   adversarial_element['Length'] + extra_vectors - 1, element['QuestionInfo'],
-                                  extra_vectors)
+                                  extra_vectors, ids)
     return create_numpy_dict(
         pad_and_stack(add_extra_embeddings(paragraphs, word_to_id_lookup, extra_vectors), max(para_sizes),
                       word_to_id_lookup),
@@ -125,7 +141,7 @@ def add_extra_embeddings(paragraphs, word_to_id_lookup, extra_vectors):
 
 
 def get_dev_batch(batch, word_to_id_lookup, extra_vectors):
-    paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes = [], [], [], [], [], []
+    paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes, ids = [], [], [], [], [], [], []
     for element in batch:
         start = element['ParagraphInfo']['AnswerStart']
         end = element['ParagraphInfo']['AnswerEnd']
@@ -134,7 +150,7 @@ def get_dev_batch(batch, word_to_id_lookup, extra_vectors):
                                           element['ParagraphInfo']['Length'] + extra_vectors, extra_vectors)
         update_default_fields(element['ParagraphInfo'], paragraphs, questions, answer_start, answer_end, para_sizes,
                               questions_sizes,
-                              start, end, element['QuestionInfo'], extra_vectors)
+                              start, end, element['QuestionInfo'], extra_vectors, ids)
     return create_numpy_dict(
         pad_and_stack(add_extra_embeddings(paragraphs, word_to_id_lookup, extra_vectors), max(para_sizes),
                       word_to_id_lookup),
@@ -143,13 +159,15 @@ def get_dev_batch(batch, word_to_id_lookup, extra_vectors):
 
 
 def update_default_fields(element, paragraphs, questions, answer_start, answer_end, para_sizes, questions_sizes, start,
-                          end, question_info, extra_vectors):
+                          end, question_info, extra_vectors, ids):
     paragraphs.append(element['Indices'])
     para_sizes.append(element['Length'] + extra_vectors)
     answer_start.append(start)
     answer_end.append(end)
     questions.append(question_info['QuestionIndices'])
     questions_sizes.append(question_info['QuestionLength'])
+    if 'ID' in element:
+        ids.append(element['ID'])
 
 
 def get_training_batch(batch, best_adversaries, word_to_id_lookup, extra_vectors):
